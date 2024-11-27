@@ -1,0 +1,191 @@
+Задание 1
+
+SELECT NumDoc, DateWrt, Creator
+FROM StkDocs;
+
+Задание 2
+
+SELECT c.Nm_Ct
+FROM Contras c
+JOIN Telct t ON c.CodCt = t.CodCt
+WHERE t.Respondent IS NULL;
+
+SELECT c.Nm_Ct, t.TelNum
+FROM Contras c
+JOIN Telct t ON c.CodCt = t.CodCt;
+
+SELECT c.Nm_Ct, COUNT(t.TelNum) AS PhoneCount
+FROM Contras c
+JOIN Telct t ON c.CodCt = t.CodCt
+GROUP BY c.Nm_Ct
+HAVING COUNT(t.TelNum) > 1;
+
+SELECT c.Nm_Ct
+FROM Contras c
+LEFT JOIN Telct t ON c.CodCt = t.CodCt
+WHERE t.TelCod IS NULL;
+
+Задание 3
+
+SELECT *
+FROM StkDocsGdsAndSrv
+WHERE SummaGdSrv > 1500
+
+Задание 4
+
+SELECT DISTINCT s.NumDoc
+FROM StkDocs s
+JOIN StkDocsGdsAndSrv sg ON s.CodDoc = sg.CodDoc
+WHERE sg.SummaGdSrv BETWEEN 3000 AND 6000;
+
+Задание 5
+
+SELECT *
+	FROM StkDocs
+	WHERE (NumDoc < ‘10000’ OR  NOT (DateWrt=to_date(’10.03.2001’,’dd.mm.yyyy’)
+	                AND Creator = “SYSADM”))
+
+Будут выведены все значения атрибутов для строк, у которых истинно хотя бы одно из условий:
+- или NumDoc меньше 10000,
+- или соблюдается хотя бы одно из условий: DateWrt не равно '10.03.2001', или Creator не равно 'SYSADM'
+
+Задание 6
+
+SELECT *
+FROM Contras
+WHERE Nm_Ct LIKE '[A-K]%';
+
+Задание 7
+
+SELECT SUM(SUMMAGDSRV) AS TOTALSUMMA
+FROM STKDOCS S
+JOIN STKDOCSGDSANDSRV SG ON S.CODDOC = SG.CODDOC
+WHERE S.DATEWRT <= TO_DATE('01.06.2005', 'DD.MM.YYYY')
+AND S.CREATOR IN ('LOBUC', 'DES');
+
+Задание 8
+
+SELECT
+    g.NmGdSrv AS ProductName,
+    sg.CodDcMSM AS ProductCode,
+    SUM(CASE
+        WHEN s.FlagInOut = 0 THEN sg.QtyGdSrv
+        WHEN s.FlagInOut = 1 THEN -sg.QtyGdSrv
+        ELSE 0
+    END) AS TotalStock
+FROM
+    StkDocs s
+JOIN
+    StkDocsGdsAndSrv sg ON s.CodDoc = sg.CodDoc
+JOIN
+    GdsAndSrv g ON sg.CodDcMSM = g.CodGdSrv
+WHERE
+    s.DateWrt <= TO_DATE('01.06.2005', 'DD.MM.YYYY')
+    AND g.Type = 0
+GROUP BY
+    g.NmGdSrv, sg.CodDcMSM
+ORDER BY
+    ProductName;
+
+Задание 9
+
+1.
+SELECT
+    s.NumDoc AS "Номер документа",
+    s.DateWrt AS "Дата документа",
+    r.NmRef AS "Наименование справочника",
+    ri.NmInRef AS "Наименование значения"
+FROM
+    StkDocs s
+JOIN
+    StkDocsRef sr ON s.CodDoc = sr.CodDoc
+JOIN
+    Refs r ON sr.CodRef = r.CodRef
+JOIN
+    RefItem ri ON sr.CodInRef = ri.CodInRef;
+
+2.
+SELECT
+    s.NumDoc AS "Номер документа",
+    s.DateWrt AS "Дата документа"
+FROM
+    StkDocs s
+JOIN
+    StkDocsRef sr ON s.CodDoc = sr.CodDoc
+JOIN
+    Refs r ON sr.CodRef = r.CodRef
+JOIN
+    RefItem ri ON sr.CodInRef = ri.CodInRef
+WHERE
+    r.NmRef = 'Вид реализации'
+    AND ri.NmInRef = 'Розничные продажи';
+
+3.
+SELECT
+    COUNT(DISTINCT s.CodDoc) AS "С аналитическим признаком",
+    (SELECT COUNT(*) FROM StkDocs) - COUNT(DISTINCT s.CodDoc) AS "Без аналитического признака"
+FROM
+    StkDocs s
+LEFT JOIN
+    StkDocsRef sr ON s.CodDoc = sr.CodDoc
+LEFT JOIN
+    Refs r ON sr.CodRef = r.CodRef
+WHERE
+    r.NmRef = 'Статус документа';
+
+4.
+SELECT
+    s.NumDoc AS "Номер документа",
+    s.DateWrt AS "Дата документа",
+    ri.NmInRef AS "Наименование аналитического признака"
+FROM
+    StkDocs s
+LEFT JOIN
+    StkDocsRef sr ON s.CodDoc = sr.CodDoc
+LEFT JOIN
+    Refs r ON sr.CodRef = r.CodRef
+LEFT JOIN
+    RefItem ri ON sr.CodInRef = ri.CodInRef
+WHERE
+    r.NmRef = 'Вид реализации' OR r.CodRef IS NULL;
+
+Задание 10
+
+-- AlfaAudit
+CREATE TABLE AlfaAudit (
+    NumID NUMBER NOT NULL,
+    TriggerName VARCHAR2(30),
+    CodGdSrv VARCHAR2(2000),
+    DbUser VARCHAR2(30),
+    DateChange DATE,
+    OldPrice NUMBER NOT NULL,
+    NewPrice NUMBER NOT NULL,
+    PRIMARY KEY (NumID)
+);
+
+CREATE SEQUENCE AlfaAudit_Seq START WITH 1 INCREMENT BY 1;
+
+CREATE OR REPLACE TRIGGER Trg_AlfaAudit_Update
+AFTER UPDATE OF PrcGdSrv
+ON StkDocsGdsAndSrv
+FOR EACH ROW
+BEGIN
+    INSERT INTO AlfaAudit (
+        NumID,
+        TriggerName,
+        CodGdSrv,
+        DbUser,
+        DateChange,
+        OldPrice,
+        NewPrice
+    ) VALUES (
+        AlfaAudit_Seq.NEXTVAL,
+        'Trg_AlfaAudit_Update',
+        (SELECT NmGdSrv FROM GdsAndSrv WHERE CodGdSrv = :NEW.CodDcMSM),
+        USER,
+        SYSDATE,
+        :OLD.PrcGdSrv,
+        :NEW.PrcGdSrv
+    );
+END;
+/
